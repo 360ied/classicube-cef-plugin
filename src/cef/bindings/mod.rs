@@ -104,7 +104,7 @@ impl RustRefApp {
 
     pub fn initialize(&self) -> Result<()> {
         let current_dir_path = env::current_dir().chain_err(|| "current_dir() None")?;
-        let cef_dir_path = "%NIXPKGS_CEF_DIR_PATH%";
+        let cef_dir_path = std::path::Pathbuf::from(r"%NIXPKGS_CEF_DIR_PATH%");
 
         #[cfg(target_os = "windows")]
         let browser_subprocess_path = cef_dir_path.join("cef.exe");
