@@ -113,6 +113,11 @@
 
             dontUseCargoParallelTests = true;
 
+            postPatch = ''
+              substituteInPlace src/cef/bindings/mod.rs \
+                --replace-fail '%NIXPKGS_CEF_DIR_PATH%' "$out/cef"
+            '';
+
             postFixup = ''
               mv -v $out/lib $out/plugins
               mv -v $out/bin $out/cef
