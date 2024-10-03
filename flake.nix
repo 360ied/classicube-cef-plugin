@@ -27,7 +27,7 @@
                 # "aarch64-darwin" = { platformUrl = "macosarm64"; projectArchCmake = "arm64"; };
               };
 
-              platforms."x86_64-linux".hash = "sha256-gmAnAU6wbphJBf7SAbF9/6AclflBwoXoaqXj61xn6Ts=";
+              platforms."x86_64-linux".hash = "sha256-Q8PFWpc7C68H/TPp4QsDSRV2EIdpmqq0XNGRo4P053Q=";
               # platforms."aarch64-linux".hash = "";
               # platforms."armv7l-linux".hash = "";
               # platforms."x86_64-darwin".hash = "";
@@ -36,7 +36,7 @@
               inherit (platforms.${pkgs.stdenv.hostPlatform.system}) platformUrl projectArchCmake hash;
             in
             (prev: rec {
-              version = "127.1.4+ge71a509+chromium-127.0.6533.89";
+              version = "128.4.12+g1d7a1f9+chromium-128.0.6613.138";
 
               src = pkgs.fetchzip {
                 inherit hash;
@@ -82,7 +82,7 @@
               outputHashes = {
                 "async-dispatcher-0.1.0" = "sha256-rqpQ176/PnI9vvPrwQvK3GJbryjb3hHkb+o1RyCZ3Vg=";
                 "clap-4.2.7" = "sha256-PccqMT2KltTC2gVL9/xfCNFOAu3+6ash9HqM/TkpgmU=";
-                "classicube-helpers-2.0.0+classicube.1.3.6" = "sha256-mGRzuvxKXKBxKgZuLkc7qzmABIj9uADuxAkahR8e840=";
+                "classicube-helpers-2.0.0+classicube.1.3.6" = "sha256-NgpBwlYCJyBV+oKyVyU5ueI9AubEZ0tsrsH+eQFF3Xk=";
               };
             };
 
