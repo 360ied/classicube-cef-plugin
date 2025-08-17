@@ -43,7 +43,7 @@ fn compute_real_volume(entity: &CefEntity) -> Option<(f32, VolumeMode)> {
     };
 
     let my_pos = vec3_to_vector3(&position);
-    let my_forward = vec3_to_vector3(&Vec3::get_dir_vector(orientation.X, 0.0));
+    let my_forward = vec3_to_vector3(&Vec3::get_dir_vector(orientation.x, 0.0));
 
     let ent_pos = vec3_to_vector3(&entity.entity.Position);
 
@@ -194,8 +194,8 @@ pub fn get_ext(url: &Url) -> Result<&str> {
             }
         })
         .unwrap_or_else(|| {
-            let parts = url.path_segments().chain_err(|| "no path segments")?;
-            let last_part = parts.last().chain_err(|| "no last_part")?;
+            let mut parts = url.path_segments().chain_err(|| "no path segments")?;
+            let last_part = parts.next_back().chain_err(|| "no last_part")?;
 
             let path = Path::new(last_part);
             path.extension()

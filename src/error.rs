@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use error_chain::error_chain;
 pub use error_chain::{bail, ensure};
 
@@ -12,7 +14,8 @@ error_chain! {
         Utf8Error(::std::str::Utf8Error);
 
         Base64(base64::DecodeError);
-        Bincode(bincode::Error);
+        BincodeDecode(bincode::error::DecodeError);
+        BincodeEncode(bincode::error::EncodeError);
         Clap(clap::Error);
         FuturesCanceled(futures::channel::oneshot::Canceled);
         Reqwest(reqwest::Error);

@@ -1,19 +1,22 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { self, nixpkgs }:
     let
       inherit (nixpkgs) lib;
+
+      rustManifest = lib.importTOML ./Cargo.toml;
+
+      revSuffix = lib.optionalString (self ? dirtyShortRev)
+        "-${self.dirtyShortRev}";
 
       makePackages = (system: dev:
         let
           pkgs = import nixpkgs {
             inherit system;
           };
-          rustManifest = lib.importTOML ./Cargo.toml;
-
 
           makeCefBinaryAttrs =
             let
@@ -27,7 +30,7 @@
                 # "aarch64-darwin" = { platformUrl = "macosarm64"; projectArchCmake = "arm64"; };
               };
 
-              platforms."x86_64-linux".hash = "sha256-Q8PFWpc7C68H/TPp4QsDSRV2EIdpmqq0XNGRo4P053Q=";
+              platforms."x86_64-linux".hash = "sha256-TnQdkQ0SRg5g97LIARSZq1e/FVqg+5LaDC6bLiC+KkM=";
               # platforms."aarch64-linux".hash = "";
               # platforms."armv7l-linux".hash = "";
               # platforms."x86_64-darwin".hash = "";
@@ -36,7 +39,7 @@
               inherit (platforms.${pkgs.stdenv.hostPlatform.system}) platformUrl projectArchCmake hash;
             in
             (prev: rec {
-              version = "128.4.12+g1d7a1f9+chromium-128.0.6613.138";
+              version = lib.strings.trim (builtins.readFile ./cef_binary_version);
 
               src = pkgs.fetchzip {
                 inherit hash;
@@ -44,15 +47,14 @@
                 url = "https://cef-builds.spotifycdn.com/cef_binary_${version}_${platformUrl}.tar.bz2";
               };
 
-              installPhase = ''
-                ${prev.installPhase}
-
+              installPhase = prev.installPhase + ''
                 # cef wants icu file next to the .so
                 mv -v $out/share/cef/* $out/lib/
                 rmdir $out/share/cef $out/share
 
-                # needed to fix "FATAL:udev_loader.cc(48)] Check failed: false."
-                patchelf --add-rpath "${lib.makeLibraryPath [pkgs.libudev0-shim]}" $out/lib/*.so
+                # old: needed to fix "FATAL:udev_loader.cc(48)] Check failed: false."
+                # needs libudev.so.1 now instead of previous ^ so.0 to link at compile time
+                patchelf --add-rpath "${lib.makeLibraryPath [ pkgs.udev ]}" $out/lib/*.so
               '';
 
               cmakeFlags =
@@ -67,7 +69,7 @@
 
           makeDefaultAttrs = (cef_binary: rec {
             pname = rustManifest.package.name;
-            version = rustManifest.package.version;
+            version = rustManifest.package.version + revSuffix;
 
             src = lib.sourceByRegex ./. [
               "^\.cargo(/.*)?$"
@@ -79,11 +81,7 @@
 
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "async-dispatcher-0.1.0" = "sha256-rqpQ176/PnI9vvPrwQvK3GJbryjb3hHkb+o1RyCZ3Vg=";
-                "clap-4.2.7" = "sha256-PccqMT2KltTC2gVL9/xfCNFOAu3+6ash9HqM/TkpgmU=";
-                "classicube-helpers-2.0.0+classicube.1.3.6" = "sha256-NgpBwlYCJyBV+oKyVyU5ueI9AubEZ0tsrsH+eQFF3Xk=";
-              };
+              allowBuiltinFetchGit = true;
             };
 
             nativeBuildInputs = with pkgs; [

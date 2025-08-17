@@ -3,9 +3,13 @@ mod generated;
 use std::{
     env,
     ffi::{CStr, CString},
+    fmt::Display,
+    fs, io,
+    iter::Iterator,
     mem,
     os::raw::c_int,
-    ptr, slice,
+    process, ptr, slice,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use tracing::{debug, warn};
@@ -64,7 +68,7 @@ pub extern "C" fn rust_handle_scheme_create(
         Ok(data) => RustSchemeReturn {
             data: data.as_ptr() as *mut std::os::raw::c_void,
             data_size: data.len() as _,
-            mime_type: b"text/html\0".as_ptr() as *mut std::os::raw::c_char,
+            mime_type: c"text/html".as_ptr().cast_mut(),
         },
 
         Err(e) => {
@@ -117,11 +121,38 @@ impl RustRefApp {
         #[cfg(target_os = "linux")]
         let browser_subprocess_path = cef_dir_path.join("cef");
 
-        // TODO allow multiple apps to run at once, maybe by using pid/uuid/random
-        // TODO then, how to cleanup unused cache? maybe in cef-loader?
-        let root_cache_path = dirs::cache_dir()
-            .unwrap_or_else(|| cef_dir_path.join("cache"))
-            .join("ClassiCube-cef");
+        let root_cache_path = {
+            let cache_dir = cef_dir_path.join("cache");
+            fs::create_dir_all(&cache_dir).chain_err(|| "create cache dir")?;
+
+            let mut dirs = fs::read_dir(&cache_dir)
+                .and_then(Iterator::collect::<io::Result<Vec<_>>>)
+                .map(|dirs| {
+                    dirs.into_iter()
+                        .filter(|dir| dir.path().is_dir())
+                        .map(|dir| dir.path())
+                        .collect::<Vec<_>>()
+                })
+                .chain_err(|| "read_dir cache_dir")?;
+
+            // sort by oldest first
+            dirs.sort();
+            debug!(?dirs);
+
+            while dirs.len() >= 10 {
+                let dir = dirs.remove(0);
+                debug!("removing old cache dir: {}", dir.display());
+                fs::remove_dir_all(&dir)
+                    .chain_err(|| format!("remove_dir_all: {}", dir.display()))?;
+            }
+
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .chain_err(|| "get current time")?;
+            let epoch = current_time.as_millis();
+            let pid = process::id();
+            cache_dir.join(format!("{epoch}-{pid}"))
+        };
 
         // ClassiCube doesn't need to run as an app bundle, but
         // this has to be set or else we get errors, although it seems to work with any non-empty string
@@ -343,10 +374,10 @@ impl Clone for RustRefBrowser {
     }
 }
 
-impl ToString for RustRefString {
-    fn to_string(&self) -> String {
+impl Display for RustRefString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = unsafe { slice::from_raw_parts(self.ptr.cast::<u8>(), self.len) };
-        String::from_utf8_lossy(s).into_owned()
+        String::from_utf8_lossy(s).fmt(f)
     }
 }
 

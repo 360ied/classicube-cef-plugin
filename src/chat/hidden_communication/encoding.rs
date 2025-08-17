@@ -30,9 +30,15 @@ pub struct Message {
     pub entities: Vec<LightEntity>,
 }
 
+const BINCODE_CONFIG: bincode::config::Configuration<
+    bincode::config::LittleEndian,
+    bincode::config::Fixint,
+    bincode::config::NoLimit,
+> = bincode::config::legacy();
+
 /// to base64
 pub fn encode(message: &Message) -> Result<String> {
-    let data = bincode::serialize(message)?;
+    let data = bincode::serde::encode_to_vec(message, BINCODE_CONFIG)?;
     let compressed_data = zstd::encode_all(Cursor::new(&data), 0)?;
 
     Ok(BASE64_STANDARD.encode(compressed_data))
@@ -42,8 +48,8 @@ pub fn encode(message: &Message) -> Result<String> {
 pub fn decode<T: AsRef<[u8]>>(input: T) -> Result<Message> {
     let compressed_data = BASE64_STANDARD.decode(input)?;
     let data = zstd::decode_all(Cursor::new(&compressed_data))?;
-
-    Ok(bincode::deserialize(&data)?)
+    let (message, _) = bincode::serde::decode_from_slice(&data, BINCODE_CONFIG)?;
+    Ok(message)
 }
 
 pub fn create_message() -> Message {
@@ -67,7 +73,7 @@ pub fn create_message() -> Message {
                 let size = entity.get_size();
                 let scale = entity.get_scale();
                 let rotation = (e.RotX, e.RotY);
-                let position = (e.Position.X, e.Position.Y, e.Position.Z);
+                let position = (e.Position.x, e.Position.y, e.Position.z);
                 let background_color = entity.background_color;
 
                 LightEntity {

@@ -131,6 +131,14 @@ fn build_libcef_dll_wrapper(links: &mut Vec<Link>) {
 
         let mut build = cmake::Config::new("cef_interface/cef_binary");
 
+        // fix for mac:
+        // clang: error: overriding '-mmacosx-version-min=11.0' option with '--target=x86_64-apple-macosx14.5'
+        #[cfg(target_os = "macos")]
+        {
+            build.cflag("-Wno-overriding-t-option");
+            build.cxxflag("-Wno-overriding-t-option");
+        }
+
         // rust builds with /MT (static C-RunTime), but libcef_dll_wrapper uses /MTd,
         // and windows does NOT like this! So remove the "d" in a big hack
         #[cfg(target_os = "windows")]
@@ -203,7 +211,10 @@ fn build_cef_interface(libcef_include_dir: &Path, links: &mut Vec<Link>) {
         .file("cef_interface/serialize.cc");
 
     #[cfg(not(target_os = "windows"))]
-    let build = build.flag("-Wno-unused-parameter");
+    let build = build.flag("-Wno-error=unused-parameter");
+
+    #[cfg(not(target_os = "windows"))]
+    let build = build.flag("-Wno-error=missing-field-initializers");
 
     #[cfg(target_os = "windows")]
     // warning C4100: 's': unreferenced formal parameter
