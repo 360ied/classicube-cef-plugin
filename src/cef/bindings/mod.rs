@@ -122,7 +122,7 @@ impl RustRefApp {
         let browser_subprocess_path = cef_dir_path.join("cef");
 
         let root_cache_path = {
-            let cache_dir = cef_dir_path.join("cache");
+            let cache_dir = current_dir_path.join("cef_cache");
             fs::create_dir_all(&cache_dir).chain_err(|| "create cache dir")?;
 
             let mut dirs = fs::read_dir(&cache_dir)
