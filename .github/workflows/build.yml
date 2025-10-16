@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   linux_nix:
-    uses: SpiralP/github-reusable-workflows/.github/workflows/build.yml@47c2d7401fd3edc8e58588c556eb481f5df739bd # main
+    uses: SpiralP/github-reusable-workflows/.github/workflows/build.yml@3b54225e839d078db571495c0aab5f2a0367ad50 # main
 
   windows_x86:
     name: Build Windows ${{ matrix.config.arch }}
@@ -34,7 +34,7 @@ jobs:
             url_target: windows32
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         id: cache-cef-binary
@@ -103,7 +103,7 @@ jobs:
             cef-windows-${{ matrix.config.arch }}.exe
 
       - name: Upload Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.config.arch == 'x86_64' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -114,7 +114,7 @@ jobs:
             cef-windows-${{ matrix.config.arch }}.exe
 
       - name: Upload Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.config.arch != 'x86_64' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -139,7 +139,7 @@ jobs:
             url_target: linux32
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Install x86_64 deps
         if: ${{ matrix.config.arch == 'x86_64' }}
@@ -234,7 +234,7 @@ jobs:
             './cef-linux-${{ matrix.config.arch }}' \
 
       - name: Upload Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -258,7 +258,7 @@ jobs:
             url_target: linuxarm64
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Install armhf deps
         if: ${{ matrix.config.arch == 'armhf' }}
@@ -326,7 +326,7 @@ jobs:
             './cef-linux-${{ matrix.config.arch }}'
 
       - name: Upload Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -337,7 +337,7 @@ jobs:
 
   mac_x86:
     name: Build MacOS ${{ matrix.config.arch }}
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
@@ -347,7 +347,7 @@ jobs:
             url_target: macosx64
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         id: cache-cef-binary
@@ -401,7 +401,7 @@ jobs:
             './cef-macos-${{ matrix.config.arch }}'
 
       - name: Upload Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -412,7 +412,7 @@ jobs:
 
   mac_arm:
     name: Build MacOS ${{ matrix.config.arch }}
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
@@ -422,7 +422,7 @@ jobs:
             url_target: macosarm64
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         id: cache-cef-binary
@@ -476,7 +476,7 @@ jobs:
             './cef-macos-${{ matrix.config.arch }}'
 
       - name: Upload Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
