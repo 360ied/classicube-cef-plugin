@@ -8,14 +8,14 @@ use std::{
 };
 
 use backtrace::Backtrace;
-use classicube_sys::{DateTime, DateTime_CurrentLocal, Window_ShowDialog};
+use classicube_sys::{DateTime_CurrentLocal, Window_ShowDialog, cc_datetime};
 
 pub fn install_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
 
 fn panic_hook(info: &PanicHookInfo<'_>) {
-    crate::logger::free();
+    crate::logger::flush_for_abort();
 
     let (popup_message, stderr_message, verbose_message) = {
         // The current implementation always returns `Some`.
@@ -34,8 +34,8 @@ fn panic_hook(info: &PanicHookInfo<'_>) {
         let bt = Backtrace::new();
 
         let date = unsafe {
-            let mut now: DateTime = mem::zeroed();
-            DateTime_CurrentLocal(&mut now);
+            let mut now: cc_datetime = mem::zeroed();
+            DateTime_CurrentLocal(&raw mut now);
             format!(
                 "{:02}/{:02}/{:04} {:02}:{:02}:{:02}",
                 now.day, now.month, now.year, now.hour, now.minute, now.second

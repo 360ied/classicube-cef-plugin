@@ -3,16 +3,10 @@ pub mod encoding;
 pub mod global_control;
 pub mod whispers;
 
-use std::{
-    cell::{Cell, RefCell},
-    slice,
-};
+use std::cell::{Cell, RefCell};
 
-use classicube_helpers::async_manager;
-use classicube_sys::{
-    MsgType_MSG_TYPE_NORMAL, Net_Handler, Protocol, Server, UNSAFE_GetString,
-    OPCODE__OPCODE_MESSAGE,
-};
+use classicube_helpers::{async_manager, chat::ProtocolMessageHook};
+use classicube_sys::Server;
 use futures::channel::oneshot;
 use tracing::debug;
 
@@ -28,42 +22,8 @@ thread_local!(
 );
 
 thread_local!(
-    static OLD_MESSAGE_HANDLER: RefCell<Net_Handler> = RefCell::default();
+    static HOOK: RefCell<Option<ProtocolMessageHook>> = const { RefCell::new(None) };
 );
-
-extern "C" fn message_handler(data: *mut u8) {
-    {
-        use classicube_sys::MsgType;
-
-        let data = unsafe { slice::from_raw_parts(data, 65) };
-        let message_type = data[0] as MsgType;
-        let text = unsafe { UNSAFE_GetString(&data[1..]) }.to_string();
-
-        if message_type == MsgType_MSG_TYPE_NORMAL && handle_chat_message(&text) {
-            return;
-        }
-    }
-
-    OLD_MESSAGE_HANDLER.with(|cell| {
-        let option = &*cell.borrow();
-        let f = option.unwrap();
-        unsafe {
-            f(data);
-        }
-    });
-}
-
-fn install_message_handler() {
-    let old_handler = unsafe { Protocol.Handlers[OPCODE__OPCODE_MESSAGE as usize] };
-    unsafe {
-        Protocol.Handlers[OPCODE__OPCODE_MESSAGE as usize] = Some(message_handler);
-    }
-
-    OLD_MESSAGE_HANDLER.with(|cell| {
-        let option = &mut *cell.borrow_mut();
-        *option = old_handler;
-    });
-}
 
 pub fn initialize() {
     debug!("initialize hidden_communication");
@@ -75,17 +35,20 @@ pub fn initialize() {
     whispers::start_listening();
     global_control::start_listening();
 
-    install_message_handler();
+    HOOK.with_borrow_mut(|hook| {
+        *hook = ProtocolMessageHook::install(handle_chat_message);
+    });
 }
 
 pub fn reset() {
     debug!("reset hidden_communication");
 
-    if unsafe { Server.IsSinglePlayer } != 0 {
-        return;
-    }
-
-    install_message_handler();
+    // reinstall() is a no-op in singleplayer and HOOK is None there anyway.
+    HOOK.with_borrow(|hook| {
+        if let Some(hook) = hook {
+            hook.reinstall();
+        }
+    });
 }
 
 pub fn on_new_map() {
@@ -107,6 +70,14 @@ pub fn shutdown() {
 
     global_control::stop_listening();
     whispers::stop_listening();
+    clients::shutdown();
+
+    // Drop uninstalls (when on top) and always clears the callback, so a
+    // trampoline still reachable via a foreign plugin's chain just forwards.
+    HOOK.with_borrow_mut(|hook| *hook = None);
+
+    SHOULD_BLOCK.set(false);
+    WAITING_FOR_MESSAGE.with(|cell| cell.borrow_mut().clear());
 }
 
 pub async fn wait_for_message() -> String {

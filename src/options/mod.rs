@@ -2,7 +2,7 @@ mod rust_option;
 
 use std::{cell::Cell, ffi::CString, os::raw::c_char};
 
-use classicube_sys::{cc_string, Options_Get, Options_Set, OwnedString, STRING_SIZE};
+use classicube_sys::{Options_Get, Options_Set, OwnedString, STRING_SIZE, cc_string};
 
 use self::rust_option::RustOption;
 
@@ -18,7 +18,7 @@ fn get<S: Into<Vec<u8>>>(key: S) -> Option<String> {
     };
 
     unsafe {
-        Options_Get(c_key.as_ptr(), &mut cc_string_value, c_default.as_ptr());
+        Options_Get(c_key.as_ptr(), &raw mut cc_string_value, c_default.as_ptr());
     }
 
     let string_value = cc_string_value.to_string();

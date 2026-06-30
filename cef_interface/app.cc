@@ -1,4 +1,7 @@
 #include "app.hh"
+
+#include <cstdlib>
+
 #include "serialize.hh"
 
 // Minimal implementation of CefApp for the browser process.
@@ -25,6 +28,25 @@ void add_switch(CefRefPtr<CefCommandLine> command_line, const CefString& name) {
 void MyApp::OnBeforeCommandLineProcessing(
     const CefString& process_type,
     CefRefPtr<CefCommandLine> command_line) {
+#if defined(__linux__)
+  // The zygote process model is Linux-only, so this workaround is too;
+  // Windows/macOS don't fork a zygote and --no-zygote is a no-op there.
+  // Browser-process-only (process_type is empty for the browser process).
+  if (process_type.empty()) {
+    // Work around Chromium's stack-guard-change-on-fork hardening
+    // (crbug.com/1206626 / cef#3912): the zygote re-randomizes
+    // __stack_chk_guard after fork, which requires every frame live across
+    // content::RunZygote() to be built without stack canaries. Our hardened
+    // cef_interface_execute_process frame is inherited by forked subprocesses
+    // and stays on their stack, so on teardown its stale canary no longer
+    // matches the re-randomized global and glibc aborts with "stack smashing
+    // detected". Disabling the zygote removes the fork path entirely; safe
+    // because we run with no_sandbox = true (--no-zygote on Linux requires
+    // --no-sandbox).
+    add_switch(command_line, "no-zygote");
+  }
+#endif
+
   command_line->AppendSwitchWithValue("autoplay-policy",
                                       "no-user-gesture-required");
 
@@ -41,6 +63,27 @@ void MyApp::OnBeforeCommandLineProcessing(
 
   add_switch(command_line, "disable-renderer-accessibility");
   add_switch(command_line, "no-proxy-server");
+
+  // opt-in: when CEF_DEVTOOLS_PORT is set, expose the Chromium DevTools
+  // protocol over HTTP on that localhost port. Used in place of
+  // ShowDevTools on Linux/macOS, where a native devtools window inside
+  // our OSR + external_message_pump setup freezes on Aura/X11.
+  // Off by default to avoid leaving an inspector port open to other
+  // processes on the machine. Requires restart to take effect.
+  if (const char* port = std::getenv("CEF_DEVTOOLS_PORT")) {
+    if (port[0] != '\0') {
+      command_line->AppendSwitchWithValue("remote-debugging-port", port);
+      // Chromium 111+ rejects DevTools websocket connections whose Origin
+      // doesn't match the listening host. External browsers (Chrome
+      // visiting http://127.0.0.1:<port>/) get a blank inspector without
+      // this opt-out.
+      command_line->AppendSwitchWithValue("remote-allow-origins", "*");
+    }
+  }
+
+  // force Chromium's Ozone backend to X11/XWayland;
+  // Wayland support is unreliable.
+  command_line->AppendSwitchWithValue("ozone-platform", "x11");
 
   // to make execute_javascript_on_frame work
   add_switch(command_line, "disable-site-isolation-trials");

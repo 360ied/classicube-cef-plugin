@@ -21,6 +21,11 @@ fn main() {
     #[cfg(target_os = "macos")]
     links.push(Link::new(LinkKind::Dynamic, "c++".to_string(), None));
 
+    // Debug libcef_dll_wrapper calls MessageBoxW from DisplayDebugMessageInDialog
+    // (compiled out when NDEBUG is defined). user32 isn't in Rust's MSVC default libs.
+    #[cfg(all(target_os = "windows", debug_assertions))]
+    links.push(Link::new(LinkKind::Dynamic, "user32".to_string(), None));
+
     let libcef_include_dir = build_libcef(&mut links);
     build_libcef_dll_wrapper(&mut links);
     build_cef_interface(&libcef_include_dir, &mut links);
@@ -47,11 +52,14 @@ fn build_libcef(links: &mut Vec<Link>) -> PathBuf {
         libcef_lib_dir
     );
 
-    // Fixes linux/windows not being able to `cargo test` because STATUS_DLL_NOT_FOUND;
-    // Putting the lib files in OUT_DIR will let `cargo test` link them at runtime.
+    // Fixes linux/windows not being able to `cargo test` / `cargo nextest run`
+    // because the test binary can't load libcef.so / cef.dll. Cargo only
+    // propagates `rustc-link-search=native=` paths to the dynamic library
+    // search path env var (LD_LIBRARY_PATH / PATH) when they live under
+    // OUT_DIR; symlinking/copying the CEF libs into OUT_DIR/libcef gets them
+    // onto that path for both debug and release test runs.
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#dynamic-library-paths
-    // Only doing this for dev test builds so that nothing strange happens for release builds.
-    #[cfg(all(debug_assertions, not(target_os = "macos")))]
+    #[cfg(not(target_os = "macos"))]
     let libcef_lib_dir = {
         use std::fs;
 
@@ -191,7 +199,6 @@ fn build_cef_interface(libcef_include_dir: &Path, links: &mut Vec<Link>) {
     let mut build = cc::Build::new();
     let build = build
         .cpp(true)
-        .std("c++17")
         .warnings(true)
         .warnings_into_errors(true)
         .static_crt(true) // only ever uses /MT, never /MTd
@@ -201,6 +208,8 @@ fn build_cef_interface(libcef_include_dir: &Path, links: &mut Vec<Link>) {
         .file("cef_interface/client.cc")
         .file("cef_interface/interface.cc")
         .file("cef_interface/serialize.cc");
+
+    let build = build.std("c++20");
 
     #[cfg(not(target_os = "windows"))]
     let build = build.flag("-Wno-error=unused-parameter");
@@ -221,6 +230,10 @@ fn build_cef_interface(libcef_include_dir: &Path, links: &mut Vec<Link>) {
     // warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
     let build = build.flag("/wd4996");
 
+    #[cfg(target_os = "windows")]
+    // Prevent windows.h min/max macros from colliding with std::min/std::max in CEF headers
+    let build = build.define("NOMINMAX", None);
+
     build.compile("cef_interface");
 
     links.push(Link::new(
@@ -233,9 +246,11 @@ fn build_cef_interface(libcef_include_dir: &Path, links: &mut Vec<Link>) {
 fn build_bindings(libcef_include_dir: &Path) {
     bindgen::Builder::default()
         .derive_copy(false)
+        .wrap_unsafe_ops(true)
         .clang_arg("-Icef_interface")
         .clang_arg(format!("-I{}", libcef_include_dir.display()))
         .clang_arg("-xc++")
+        .clang_arg("-std=c++20")
         .header_contents(
             "bindgen.hpp",
             "#include \"interface.hh\"",

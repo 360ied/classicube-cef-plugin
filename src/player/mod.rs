@@ -19,7 +19,7 @@ pub use self::{
 };
 use crate::{
     cef::RustRefBrowser,
-    error::{bail, Result},
+    error::{Result, bail},
 };
 
 pub trait PlayerTrait: Clone {
@@ -47,8 +47,12 @@ pub trait PlayerTrait: Clone {
     fn get_volume(&self) -> f32 {
         1.0
     }
-    fn set_volume(&mut self, _browser: Option<&RustRefBrowser>, _percent: f32) -> Result<()> {
-        bail!("setting volume not supported");
+    fn set_volume(&mut self, _browser: Option<&RustRefBrowser>, percent: f32) -> Result<()> {
+        if (percent - 1.0).abs() > 0.01 {
+            bail!("setting volume not supported");
+        } else {
+            Ok(())
+        }
     }
 
     fn get_volume_mode(&self) -> VolumeMode {
@@ -57,14 +61,15 @@ pub trait PlayerTrait: Clone {
     fn set_volume_mode(
         &mut self,
         _browser: Option<&RustRefBrowser>,
-        _mode: VolumeMode,
+        mode: VolumeMode,
     ) -> Result<()> {
-        bail!("setting volume mode not supported");
+        if mode == VolumeMode::Global {
+            Ok(())
+        } else {
+            bail!("setting volume mode not supported");
+        }
     }
 
-    fn get_autoplay(&self) -> bool {
-        true
-    }
     fn set_autoplay(&mut self, _browser: Option<&RustRefBrowser>, autoplay: bool) -> Result<()> {
         if autoplay {
             Ok(())
@@ -73,9 +78,6 @@ pub trait PlayerTrait: Clone {
         }
     }
 
-    fn get_loop(&self) -> bool {
-        false
-    }
     fn set_loop(&mut self, _browser: Option<&RustRefBrowser>, should_loop: bool) -> Result<()> {
         if should_loop {
             bail!("looping unsupported");
@@ -300,17 +302,6 @@ impl PlayerTrait for Player {
         }
     }
 
-    fn get_autoplay(&self) -> bool {
-        match self {
-            Player::YouTube(player) => player.get_autoplay(),
-            Player::Dash(player) => player.get_autoplay(),
-            Player::Hls(player) => player.get_autoplay(),
-            Player::Media(player) => player.get_autoplay(),
-            Player::Image(player) => player.get_autoplay(),
-            Player::Web(player) => player.get_autoplay(),
-        }
-    }
-
     fn set_autoplay(&mut self, browser: Option<&RustRefBrowser>, autoplay: bool) -> Result<()> {
         match self {
             Player::YouTube(player) => player.set_autoplay(browser, autoplay),
@@ -319,17 +310,6 @@ impl PlayerTrait for Player {
             Player::Media(player) => player.set_autoplay(browser, autoplay),
             Player::Image(player) => player.set_autoplay(browser, autoplay),
             Player::Web(player) => player.set_autoplay(browser, autoplay),
-        }
-    }
-
-    fn get_loop(&self) -> bool {
-        match self {
-            Player::YouTube(player) => player.get_loop(),
-            Player::Dash(player) => player.get_loop(),
-            Player::Hls(player) => player.get_loop(),
-            Player::Media(player) => player.get_loop(),
-            Player::Image(player) => player.get_loop(),
-            Player::Web(player) => player.get_loop(),
         }
     }
 
@@ -418,6 +398,11 @@ pub fn on_new_map() {
 pub fn on_new_map_loaded() {
     volume_fade::on_new_map_loaded();
     url_aliases::on_new_map_loaded();
+}
+
+pub fn shutdown() {
+    volume_fade::shutdown();
+    url_aliases::shutdown();
 }
 
 #[test]

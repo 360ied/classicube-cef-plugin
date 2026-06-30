@@ -8,7 +8,7 @@ use std::{
 use classicube_helpers::WithInner;
 use tracing::{debug, warn};
 
-use super::{bindings::RustRect, CefEvent, CEF_DEFAULT_HEIGHT, CEF_DEFAULT_WIDTH, EVENT_QUEUE};
+use super::{CEF_DEFAULT_HEIGHT, CEF_DEFAULT_WIDTH, CefEvent, EVENT_QUEUE, bindings::RustRect};
 use crate::cef::RustRefBrowser;
 
 // identifier, browser
@@ -123,4 +123,12 @@ pub extern "C" fn on_certificate_error_callback(browser: RustRefBrowser) -> bool
 
         allow_insecure.get(&browser_id).is_some_and(|allow| *allow)
     })
+}
+
+pub fn shutdown() {
+    // Cef::shutdown closes browsers via close_all_browsers, which already
+    // drains BROWSERS via mem::take. Clear the metadata maps too so a
+    // subsequent Init starts from a clean slate.
+    BROWSER_SIZES.with(|cell| cell.borrow_mut().clear());
+    ALLOW_INSECURE.with(|cell| cell.borrow_mut().clear());
 }

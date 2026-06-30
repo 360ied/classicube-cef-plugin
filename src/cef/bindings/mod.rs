@@ -6,7 +6,6 @@ use std::{
     fmt::Display,
     fs, io,
     iter::Iterator,
-    mem,
     os::raw::c_int,
     process, ptr, slice,
     time::{SystemTime, UNIX_EPOCH},
@@ -17,18 +16,22 @@ use url::Url;
 
 pub use self::generated::*;
 use super::{javascript, javascript::RustV8Value};
-use crate::error::{bail, ErrorKind, Result, ResultExt};
+use crate::error::{ErrorKind, Result, ResultExt, bail};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust_debug(c_str: *const ::std::os::raw::c_char) {
-    let s = CStr::from_ptr(c_str).to_string_lossy().to_string();
+    let s = unsafe { CStr::from_ptr(c_str) }
+        .to_string_lossy()
+        .to_string();
 
     debug!("{}", s);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust_warn(c_str: *const ::std::os::raw::c_char) {
-    let s = CStr::from_ptr(c_str).to_string_lossy().to_string();
+    let s = unsafe { CStr::from_ptr(c_str) }
+        .to_string_lossy()
+        .to_string();
 
     warn!("{}", s);
 }
@@ -41,24 +44,23 @@ fn handle_scheme_create(
     _scheme_name: *const ::std::os::raw::c_char,
     url: *const ::std::os::raw::c_char,
 ) -> Result<&'static [u8]> {
-    // let scheme_name = unsafe { CStr::from_ptr(scheme_name) }.to_str()?;
     let url = unsafe { CStr::from_ptr(url) }.to_str()?;
     let url = Url::parse(url)?;
-    let host = url.host_str().chain_err(|| "no host part on url")?;
 
-    debug!("rust_handle_scheme_create {:?}", host);
+    debug!("rust_handle_scheme_create {}", url);
 
-    match host {
-        "youtube" => Ok(YOUTUBE_HTML),
-        "media" => Ok(MEDIA_HTML),
-
-        _ => {
-            bail!("no such local scheme for {:?}", host);
-        }
+    // YouTube goes through the synthetic https host so its embedder
+    // identity check sees a valid https origin via ancestorOrigins;
+    // everything else stays on `local://` to keep mixed-content support
+    // (the media player loads plain http streams).
+    match (url.scheme(), url.host_str(), url.path()) {
+        ("https", Some("classicube-cef.invalid"), "/youtube") => Ok(YOUTUBE_HTML),
+        ("local", Some("media"), _) => Ok(MEDIA_HTML),
+        _ => bail!("no page registered for {}", url),
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rust_handle_scheme_create(
     browser: RustRefBrowser,
     scheme_name: *const ::std::os::raw::c_char,
@@ -83,7 +85,7 @@ pub extern "C" fn rust_handle_scheme_create(
     }
 }
 
-// #[no_mangle]
+// #[unsafe(no_mangle)]
 // pub unsafe extern "C" fn rust_wprint(c_str: *const u16) {
 //     use widestring::WideCStr;
 
@@ -172,6 +174,8 @@ impl RustRefApp {
         #[cfg(target_os = "macos")]
         let locales_dir_path = std::path::PathBuf::new();
 
+        let log_file = current_dir_path.join("cef-binary.log");
+
         let browser_subprocess_path =
             CString::new(format!("{}", browser_subprocess_path.display()))?;
         let root_cache_path = CString::new(format!("{}", root_cache_path.display()))?;
@@ -182,6 +186,8 @@ impl RustRefApp {
         let resources_dir_path = CString::new(format!("{}", resources_dir_path.display()))?;
         let locales_dir_path = CString::new(format!("{}", locales_dir_path.display()))?;
 
+        let log_file = CString::new(format!("{}", log_file.display()))?;
+
         let paths = CefInitializePaths {
             browser_subprocess_path: browser_subprocess_path.as_ptr(),
             root_cache_path: root_cache_path.as_ptr(),
@@ -191,6 +197,8 @@ impl RustRefApp {
 
             main_bundle_path: main_bundle_path.as_ptr(),
             framework_dir_path: framework_dir_path.as_ptr(),
+
+            log_file: log_file.as_ptr(),
         };
 
         to_result(unsafe { cef_interface_initialize(self.ptr, paths) })
@@ -421,13 +429,13 @@ impl Drop for FFIRustV8Value {
         unsafe {
             let inner = &mut self.__bindgen_anon_1;
 
-            // hack to make sure the union fields call our drop
+            // drop the active union variant in place (no-op for Copy types)
             match self.tag {
-                FFIRustV8ValueTag::Bool => mem::swap(inner.bool_.as_mut(), &mut mem::zeroed()),
-                FFIRustV8ValueTag::Double => mem::swap(inner.double_.as_mut(), &mut mem::zeroed()),
-                FFIRustV8ValueTag::Int => mem::swap(inner.int_.as_mut(), &mut mem::zeroed()),
-                FFIRustV8ValueTag::String => mem::swap(inner.string.as_mut(), &mut mem::zeroed()),
-                FFIRustV8ValueTag::UInt => mem::swap(inner.uint.as_mut(), &mut mem::zeroed()),
+                FFIRustV8ValueTag::Bool => ptr::drop_in_place(inner.bool_.as_mut()),
+                FFIRustV8ValueTag::Double => ptr::drop_in_place(inner.double_.as_mut()),
+                FFIRustV8ValueTag::Int => ptr::drop_in_place(inner.int_.as_mut()),
+                FFIRustV8ValueTag::String => ptr::drop_in_place(inner.string.as_mut()),
+                FFIRustV8ValueTag::UInt => ptr::drop_in_place(inner.uint.as_mut()),
                 FFIRustV8ValueTag::Unknown
                 | FFIRustV8ValueTag::Array
                 | FFIRustV8ValueTag::ArrayBuffer
@@ -445,9 +453,9 @@ impl Drop for FFIRustV8Response {
     fn drop(&mut self) {
         unsafe {
             if self.success {
-                mem::swap(self.__bindgen_anon_1.result.as_mut(), &mut mem::zeroed());
+                ptr::drop_in_place(self.__bindgen_anon_1.result.as_mut());
             } else {
-                mem::swap(self.__bindgen_anon_1.error.as_mut(), &mut mem::zeroed());
+                ptr::drop_in_place(self.__bindgen_anon_1.error.as_mut());
             }
         }
     }

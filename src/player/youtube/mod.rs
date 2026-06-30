@@ -13,11 +13,11 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 use url::Url;
 
-use super::{helpers::start_update_loop, PlayerTrait, VolumeMode};
+use super::{PlayerTrait, VolumeMode, helpers::start_update_loop};
 use crate::{
     cef::{RustRefBrowser, RustV8Value},
     chat::Chat,
-    error::{bail, Result},
+    error::{Result, bail},
     options,
     options::SUBTITLES,
 };
@@ -120,7 +120,7 @@ impl PlayerTrait for YouTubePlayer {
         self.create_time = Some(Instant::now());
 
         let mut params = vec![
-            ("id", self.id.to_string()),
+            ("id", self.id.clone()),
             ("time", format!("{}", self.time.as_secs())),
             ("volume", format!("{}", self.volume)),
             ("speed", format!("{}", self.speed)),
@@ -142,7 +142,7 @@ impl PlayerTrait for YouTubePlayer {
             params.push(("playlist", "1".to_string()));
         }
 
-        Ok(Url::parse_with_params("local://youtube/", &params)?.into())
+        Ok(Url::parse_with_params("https://classicube-cef.invalid/youtube", &params)?.into())
     }
 
     fn on_page_loaded(&mut self, entity_id: usize, _browser: &RustRefBrowser) {
@@ -198,11 +198,11 @@ impl PlayerTrait for YouTubePlayer {
 
     /// volume is a float between 0-1
     fn set_volume(&mut self, browser: Option<&RustRefBrowser>, volume: f32) -> Result<()> {
-        if let Some(browser) = browser {
-            if (volume - self.volume).abs() > 0.0001 {
-                let volume_modifier = options::VOLUME.get()?;
-                Self::execute(browser, &format!("setVolume({})", volume * volume_modifier))?;
-            }
+        if let Some(browser) = browser
+            && (volume - self.volume).abs() > 0.0001
+        {
+            let volume_modifier = options::VOLUME.get()?;
+            Self::execute(browser, &format!("setVolume({})", volume * volume_modifier))?;
         }
 
         self.volume = volume;
@@ -260,17 +260,9 @@ impl PlayerTrait for YouTubePlayer {
         Ok(())
     }
 
-    fn get_autoplay(&self) -> bool {
-        self.autoplay
-    }
-
     fn set_autoplay(&mut self, _browser: Option<&RustRefBrowser>, autoplay: bool) -> Result<()> {
         self.autoplay = autoplay;
         Ok(())
-    }
-
-    fn get_loop(&self) -> bool {
-        self.should_loop
     }
 
     fn set_loop(&mut self, _browser: Option<&RustRefBrowser>, should_loop: bool) -> Result<()> {
@@ -620,7 +612,7 @@ fn test_youtube() {
             let ids = [
                 "https://youtu.be/mZpa3nOLOa8?list=PLDfU1tT3TQ16cW3WdAKf2WicS6wrdgZxB&t=69",
                 "https://www.youtube.com/watch?v=mZpa3nOLOa8&list=PLDfU1tT3TQ16cW3WdAKf2WicS6wrdgZxB&index=1&t=69",
-                "https://www.youtube.com/shorts/mZpa3nOLOa8?t=69&feature=share"
+                "https://www.youtube.com/shorts/mZpa3nOLOa8?t=69&feature=share",
             ];
             let should = YouTubePlayer {
                 id: "mZpa3nOLOa8".to_string(),

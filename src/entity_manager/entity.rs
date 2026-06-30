@@ -8,9 +8,9 @@ use std::{
 
 use classicube_helpers::{async_manager, color::SILVER};
 use classicube_sys::{
-    cc_int16, Bitmap, Entity, EntityVTABLE, Entity_Init, Entity_SetModel, Gfx_UpdateTexturePart,
-    LocationUpdate, Model_Render, OwnedGfxTexture, OwnedString, PackedCol, Texture, TextureRec,
-    PACKEDCOL_WHITE,
+    Bitmap, Entity, Entity_Init, Entity_SetModel, EntityVTABLE, Gfx_UpdateTexturePart,
+    LocationUpdate, Model_Render, OwnedGfxTexture, OwnedString, PACKEDCOL_WHITE, PackedCol,
+    Texture, TextureRec, cc_int16,
 };
 use futures::channel::oneshot;
 use tracing::{debug, warn};
@@ -18,7 +18,7 @@ use tracing::{debug, warn};
 use super::{BROWSER_ID_TO_ENTITY_ID, TEXTURE_HEIGHT, TEXTURE_WIDTH};
 use crate::{
     api,
-    cef::RustRefBrowser,
+    cef::{Cef, RustRefBrowser},
     chat::Chat,
     entity_manager::{DEFAULT_MODEL_HEIGHT, DEFAULT_MODEL_WIDTH},
     error::{Error, Result, ResultExt},
@@ -73,7 +73,8 @@ impl CefEntity {
             height: TEXTURE_HEIGHT as i32,
         };
 
-        let texture = OwnedGfxTexture::new(&mut bmp, true, false);
+        let texture =
+            OwnedGfxTexture::new(&mut bmp, true, false).expect("create CEF entity texture");
 
         let mut this = Self {
             id,
@@ -164,7 +165,7 @@ impl CefEntity {
         self.entity.NameTex.uv.v2 = part.height as f32 / TEXTURE_HEIGHT as f32;
 
         unsafe {
-            Gfx_UpdateTexturePart(self.texture.resource_id, 0, 0, &mut part, 0);
+            Gfx_UpdateTexturePart(self.texture.resource_id, 0, 0, &raw mut part, 0);
         }
     }
 
@@ -292,6 +293,10 @@ impl CefEntity {
             self.player = player;
         }
 
+        // CEF doesn't preserve SetAudioMuted across LoadURL, so reapply
+        // before navigating so the new page starts in the correct state.
+        browser.set_audio_muted(Cef::should_mute_for_focus())?;
+
         browser.load_url(url)?;
 
         Ok(())
@@ -319,12 +324,19 @@ impl CefEntity {
         });
     }
 
-    pub fn on_page_loaded(&mut self, browser: &RustRefBrowser) {
+    pub fn on_page_loaded(&mut self, browser: &RustRefBrowser) -> Result<()> {
+        // Reassert the focus-mute state after navigation in case any new
+        // audio streams (e.g. cross-origin iframes) were spun up by the
+        // newly loaded page.
+        browser.set_audio_muted(Cef::should_mute_for_focus())?;
+
         self.player.on_page_loaded(self.id, browser);
 
         for sender in self.page_loaded_senders.drain(..) {
             let _ignore = sender.send(());
         }
+
+        Ok(())
     }
 
     pub fn wait_for_page_load(&mut self) -> oneshot::Receiver<()> {

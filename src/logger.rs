@@ -3,7 +3,7 @@ use std::{fs::File, io::BufWriter, sync::Once};
 use tracing_flame::FlameLayer;
 use tracing_subscriber::{
     filter::EnvFilter,
-    fmt::{time::SystemTime, Layer},
+    fmt::{Layer, time::SystemTime},
     prelude::*,
 };
 
@@ -13,6 +13,11 @@ enum Guard {
     #[allow(dead_code)]
     Flame(tracing_flame::FlushGuard<BufWriter<File>>),
 }
+
+// Held for the lifetime of the process. The tracing subscriber is
+// installed exactly once (via `Once`); on plugin reload we must keep
+// the appender's worker thread alive so log lines after the second
+// `Init` still reach `cef.log`.
 static mut GUARDS: Option<Vec<Guard>> = None;
 
 pub fn initialize(debug: bool, module_filter: Option<&str>, flame: bool) {
@@ -29,12 +34,14 @@ pub fn initialize(debug: bool, module_filter: Option<&str>, flame: bool) {
 
         let level = if debug { "debug" } else { "info" };
 
-        let mut filter = EnvFilter::from_default_env();
-        if let Some(module) = module_filter {
-            filter = filter.add_directive(format!("{module}={level}").parse().unwrap());
+        let default_directive = if let Some(module) = module_filter {
+            format!("{module}={level}").parse().unwrap()
         } else {
-            filter = filter.add_directive(level.parse().unwrap());
-        }
+            level.parse().unwrap()
+        };
+        let filter = EnvFilter::builder()
+            .with_default_directive(default_directive)
+            .from_env_lossy();
 
         let mut guards = Vec::with_capacity(2);
 
@@ -60,13 +67,16 @@ pub fn initialize(debug: bool, module_filter: Option<&str>, flame: bool) {
                     .with_timer(SystemTime),
             );
 
-        if flame {
+        let result = if flame {
             let (flame_layer, guard) = FlameLayer::with_file("./flame.log").unwrap();
             guards.push(Guard::Flame(guard));
 
-            subscriber.with(flame_layer).init();
+            subscriber.with(flame_layer).try_init()
         } else {
-            subscriber.init();
+            subscriber.try_init()
+        };
+        if let Err(e) = result {
+            eprintln!("failed to init tracing subscriber: {e}");
         }
 
         unsafe {
@@ -75,7 +85,13 @@ pub fn initialize(debug: bool, module_filter: Option<&str>, flame: bool) {
     });
 }
 
-pub fn free() {
+/// Flush and drop the appender guards. Only call this from the panic hook
+/// just before `process::abort()` — the abort would otherwise skip the
+/// `WorkerGuard` destructor and the file writer would lose buffered log
+/// lines. **Don't** call this from plugin `Free`: a subsequent `Init`
+/// won't re-arm the appender (the `Once` doesn't re-run), and we'd lose
+/// file logging for the rest of the process.
+pub fn flush_for_abort() {
     unsafe {
         GUARDS = None;
     }

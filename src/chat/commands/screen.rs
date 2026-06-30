@@ -17,7 +17,7 @@ use crate::{
     cef::Cef,
     chat::{Chat, PlayerSnapshot},
     entity_manager::{CefEntity, EntityManager, TargetEntity},
-    error::{bail, ensure, Error, Result, ResultExt},
+    error::{Error, Result, ResultExt, bail, ensure},
     helpers::format_duration,
     player::{PlayerBuilder, PlayerTrait, VolumeMode},
 };
@@ -683,7 +683,7 @@ pub async fn run(player: PlayerSnapshot, commands: Commands) -> Result<()> {
 
                 if let Some(name) = &name {
                     args.push("--name".to_string());
-                    args.push(name.to_string());
+                    args.push(name.clone());
                 }
 
                 super::run(player.clone(), args, true, true).await?;

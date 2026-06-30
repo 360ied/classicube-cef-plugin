@@ -10,24 +10,25 @@ use std::{
     os::raw::c_int,
 };
 
-use classicube_helpers::{async_manager, shared::FutureShared, WithInner};
+use classicube_helpers::{WithInner, async_manager, shared::FutureShared};
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::broadcast;
-use tracing::{debug, debug_span, error, warn, Instrument};
+use tracing::{Instrument, debug, debug_span, error, warn};
 
 pub use self::{
     bindings::{
-        cef_interface_execute_process, Callbacks, RustRefApp, RustRefBrowser, RustRefClient,
+        Callbacks, RustRefApp, RustRefBrowser, RustRefClient, cef_interface_execute_process,
     },
     javascript::RustV8Value,
 };
 use self::{
-    browser::{BROWSERS, BROWSER_SIZES},
+    browser::{BROWSER_SIZES, BROWSERS},
     mute_lose_focus::IS_FOCUSED,
 };
 use crate::{
-    entity_manager::{cef_paint_callback, TEXTURE_HEIGHT, TEXTURE_WIDTH},
-    error::{bail, Result, ResultExt},
+    entity_manager::{TEXTURE_HEIGHT, TEXTURE_WIDTH, cef_paint_callback},
+    error::{Result, ResultExt, bail},
+    options::MUTE_LOSE_FOCUS,
 };
 
 pub const CEF_DEFAULT_WIDTH: u16 = 1920;
@@ -172,6 +173,9 @@ impl Cef {
             });
         }
 
+        browser::shutdown();
+        javascript::shutdown();
+
         IS_INITIALIZED.set(false);
     }
 
@@ -234,13 +238,24 @@ impl Cef {
 
         debug!("Cef::create_browser => {}", browser_id);
 
-        if !IS_FOCUSED.get() {
+        if Self::should_mute_for_focus() {
             browser.set_audio_muted(true)?;
         }
 
         drop(mutex);
 
         Ok(browser)
+    }
+
+    /// Returns whether new/navigating browsers should be muted right now,
+    /// based on the `cef-mute-lose-focus` option and the focus state tracked
+    /// by `mute_lose_focus`.
+    ///
+    /// CEF's `SetAudioMuted` state is not preserved across `LoadURL`, so
+    /// callers that load a new URL into an existing browser must reapply
+    /// the mute via this helper to keep `cef-mute-lose-focus` honored.
+    pub fn should_mute_for_focus() -> bool {
+        MUTE_LOSE_FOCUS.get().unwrap_or(false) && !IS_FOCUSED.get()
     }
 
     pub async fn close_browser(browser: &RustRefBrowser) -> Result<()> {
@@ -251,10 +266,10 @@ impl Cef {
         browser.close()?;
 
         loop {
-            if let CefEvent::BrowserClosed(browser) = event_receiver.recv().await.unwrap() {
-                if browser.get_identifier() == id {
-                    break;
-                }
+            if let CefEvent::BrowserClosed(browser) = event_receiver.recv().await.unwrap()
+                && browser.get_identifier() == id
+            {
+                break;
             }
         }
 

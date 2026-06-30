@@ -7,7 +7,7 @@ use tracing::debug;
 use url::Url;
 
 use crate::{
-    error::{bail, ensure, Result},
+    error::{Result, bail, ensure},
     player::{PlayerTrait, WebPlayer},
 };
 
@@ -23,6 +23,10 @@ pub fn on_new_map_loaded() {
         let url_aliases = &mut *cell.borrow_mut();
         url_aliases.clear();
     });
+}
+
+pub fn shutdown() {
+    URL_ALIASES.with(|cell| cell.borrow_mut().clear());
 }
 
 pub fn add_alias(alias: &str, url: &str) -> Result<()> {

@@ -2,7 +2,7 @@ use classicube_helpers::async_manager;
 use serde::Deserialize;
 use tracing::debug;
 
-use crate::error::{bail, Error, Result};
+use crate::error::{Error, Result, bail};
 
 const API_URL: &str = "https://youtube-api.spiralp.xyz";
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -108,7 +108,7 @@ pub async fn search(query: &str) -> Result<SearchResponse> {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hits live YouTube API; requires network and credentials"]
 fn test_youtube_search() {
     crate::logger::initialize(true, None, false);
     async_manager::initialize();
@@ -122,7 +122,7 @@ fn test_youtube_search() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hits live YouTube API; requires network and credentials"]
 fn test_youtube_video() {
     crate::logger::initialize(true, None, false);
     async_manager::initialize();

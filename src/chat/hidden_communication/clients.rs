@@ -1,16 +1,17 @@
 use std::{cell::RefCell, collections::HashSet, time::Duration};
 
-use classicube_helpers::{async_manager, tab_list::remove_color, WithInner};
+use classicube_helpers::{WithInner, async_manager, tab_list::remove_color};
 use classicube_sys::ENTITIES_SELF_ID;
 use futures::{future::RemoteHandle, prelude::*};
 use tracing::{debug, warn};
 
-use super::{wait_for_message, SHOULD_BLOCK};
+use super::{SHOULD_BLOCK, wait_for_message};
 use crate::{
     chat::{
+        Chat, TAB_LIST,
         helpers::{is_clients_message, is_clients_start_message},
         hidden_communication::whispers::start_whispering,
-        is_continuation_message, Chat, TAB_LIST,
+        is_continuation_message,
     },
     error::{Result, ResultExt},
 };
@@ -67,6 +68,12 @@ pub fn stop_query() {
     // });
 }
 
+pub fn shutdown() {
+    CURRENT_RUNNING.with(|cell| {
+        cell.borrow_mut().take();
+    });
+}
+
 async fn get_clients() -> Result<Vec<String>> {
     // TODO check for "Server software: MCGalaxy 1.9.2.0"
 
@@ -100,15 +107,13 @@ async fn get_clients() -> Result<Vec<String>> {
         loop {
             let message = wait_for_message().await;
 
-            if was_clients_message {
-                if let Some(message) = is_continuation_message(&message) {
-                    let message = remove_color(message);
-                    SHOULD_BLOCK.set(true);
+            if was_clients_message && let Some(message) = is_continuation_message(&message) {
+                let message = remove_color(message);
+                SHOULD_BLOCK.set(true);
 
-                    let last_message = messages.last_mut().unwrap();
-                    *last_message = format!("{last_message} {message}");
-                    continue;
-                }
+                let last_message = messages.last_mut().unwrap();
+                *last_message = format!("{last_message} {message}");
+                continue;
             }
             if let Some(message) = is_clients_message(&message) {
                 let message = remove_color(message);
